@@ -5,7 +5,7 @@ const USER = 'gs_user';
 const WORKING = 'gs_working_rr';
 
 /** Change this when the computer Wi-Fi address changes. */
-export const CURRENT_WIFI_IP = '189.72.146.91';
+export const CURRENT_WIFI_IP = '192.168.5.194';
 const API_PORT = 4000;
 
 export const COMPUTER_API = `http://${CURRENT_WIFI_IP}:${API_PORT}`;
@@ -103,9 +103,13 @@ export async function api(path, options = {}) {
   const headers = { 'X-Client': 'mobile', ...(options.headers || {}) };
   if (memory.token) headers.Authorization = `Bearer ${memory.token}`;
   let body = options.body;
+  const method = String(options.method || 'GET').toUpperCase();
   if (body && typeof body === 'object' && !(body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
     body = JSON.stringify(body);
+  } else if (!body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+    headers['Content-Type'] = 'application/json';
+    body = '{}';
   }
   let response;
   try {
@@ -120,7 +124,12 @@ export async function api(path, options = {}) {
   }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(data.error || 'Request failed.');
+    const fallback = response.status === 413
+      ? 'File is too large for the server (HTTP 413).'
+      : response.status >= 502 && response.status <= 504
+        ? `Server timed out or is unavailable (HTTP ${response.status}).`
+        : `Request failed (HTTP ${response.status}).`;
+    const error = new Error(data.error || fallback);
     error.payload = data;
     throw error;
   }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FlatList, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { api } from '../api';
 import { expandedPartyName, partyChoices } from '../partyName';
@@ -64,11 +64,19 @@ export default function UploadScreen({ navigation }) {
     const file = picked.assets[0];
     setBusy(true);
     try {
-      const local = await fetch(file.uri);
-      const source = await local.blob();
-      const pdf = source.type === 'application/pdf' ? source : new Blob([source], { type: 'application/pdf' });
       const body = new FormData();
-      body.append('file', pdf, file.name || 'receipt.pdf');
+      if (Platform.OS === 'web') {
+        const local = await fetch(file.uri);
+        const source = await local.blob();
+        const pdf = source.type === 'application/pdf' ? source : new Blob([source], { type: 'application/pdf' });
+        body.append('file', pdf, file.name || 'receipt.pdf');
+      } else {
+        body.append('file', {
+          uri: file.uri,
+          name: file.name || 'receipt.pdf',
+          type: file.mimeType || 'application/pdf',
+        });
+      }
       const data = await api('/api/receipts/upload', { method: 'POST', body });
       setReceipt(data.receipt);
       setPartyName(data.receipt.partyName || '');

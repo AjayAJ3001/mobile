@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
@@ -24,11 +24,19 @@ export default function RrMasterScreen() {
     const file = picked.assets[0];
     setBusy(true);
     try {
-      const local = await fetch(file.uri);
-      const source = await local.blob();
-      const pdf = source.type === 'application/pdf' ? source : new Blob([source], { type: 'application/pdf' });
       const body = new FormData();
-      body.append('file', pdf, file.name || 'rr-master.pdf');
+      if (Platform.OS === 'web') {
+        const local = await fetch(file.uri);
+        const source = await local.blob();
+        const pdf = source.type === 'application/pdf' ? source : new Blob([source], { type: 'application/pdf' });
+        body.append('file', pdf, file.name || 'rr-master.pdf');
+      } else {
+        body.append('file', {
+          uri: file.uri,
+          name: file.name || 'rr-master.pdf',
+          type: file.mimeType || 'application/pdf',
+        });
+      }
       await api('/api/rr-masters', { method: 'POST', body });
       load();
     } catch (err) {
