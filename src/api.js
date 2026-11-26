@@ -5,7 +5,7 @@ const USER = 'gs_user';
 const WORKING = 'gs_working_rr';
 
 /** Change this when the computer Wi-Fi address changes. */
-export const CURRENT_WIFI_IP = '192.168.5.194';
+export const CURRENT_WIFI_IP = '189.72.146.91';
 const API_PORT = 4000;
 
 export const COMPUTER_API = `http://${CURRENT_WIFI_IP}:${API_PORT}`;
@@ -98,13 +98,56 @@ export async function clearSession() {
   await AsyncStorage.multiRemove([TOKEN, USER]);
 }
 
+function sendFormDataWithXhr(url, { method = 'POST', headers = {}, body, timeout = 180000 }) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+    xhr.timeout = timeout;
+    for (const [key, val] of Object.entries(headers)) {
+      if (key.toLowerCase() !== 'content-type') {
+        xhr.setRequestHeader(key, val);
+      }
+    }
+    xhr.onload = () => {
+      let data = {};
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        data = { error: xhr.responseText };
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data);
+      } else {
+        const fallback = xhr.status === 413
+          ? 'File is too large for the server (HTTP 413).'
+          : xhr.status >= 502 && xhr.status <= 504
+            ? `Server timed out or is unavailable (HTTP ${xhr.status}).`
+            : `Request failed (HTTP ${xhr.status}).`;
+        const err = new Error(data.error || fallback);
+        err.payload = data;
+        reject(err);
+      }
+    };
+    xhr.onerror = () => {
+      reject(new Error(`Cannot reach server. Please check your network connection.`));
+    };
+    xhr.ontimeout = () => {
+      reject(new Error('Upload timed out. Server OCR took too long.'));
+    };
+    xhr.send(body);
+  });
+}
+
 export async function api(path, options = {}) {
   if (!options.skipDiscover) await discoverServer();
   const headers = { 'X-Client': 'mobile', ...(options.headers || {}) };
   if (memory.token) headers.Authorization = `Bearer ${memory.token}`;
   let body = options.body;
   const method = String(options.method || 'GET').toUpperCase();
-  if (body && typeof body === 'object' && !(body instanceof FormData)) {
+  if (body && body instanceof FormData) {
+    delete headers['Content-Type'];
+    return sendFormDataWithXhr(`${memory.baseUrl}${path}`, { method, headers, body });
+  } else if (body && typeof body === 'object') {
     headers['Content-Type'] = 'application/json';
     body = JSON.stringify(body);
   } else if (!body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
@@ -113,7 +156,7 @@ export async function api(path, options = {}) {
   }
   let response;
   try {
-    response = await fetch(`${memory.baseUrl}${path}`, { ...options, headers, body });
+    response = await fetch(`${memory.baseUrl}${path}`, { method, headers, body });
   } catch (err) {
     const message = err?.message || '';
     if (/network request failed|failed to connect|network error|timed out|aborted/i.test(message)) {
