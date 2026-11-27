@@ -64,8 +64,8 @@ export default function TrucksScreen({ navigation }) {
   }, [selected?.id, party?.id]);
 
   async function save() {
-    if (!/^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/.test(truckNo)) {
-      setError('Enter the truck number like TN59AB1234.');
+    if (!truckNo.trim()) {
+      setError('Enter the truck number.');
       return;
     }
     if (!selected) {
@@ -134,16 +134,16 @@ export default function TrucksScreen({ navigation }) {
           style={styles.input}
           value={truckNo}
           placeholder="Enter the truck no"
-          maxLength={10}
+          maxLength={15}
           autoCapitalize="characters"
           autoCorrect={false}
           autoComplete="off"
           importantForAutofill="no"
           secureTextEntry={false}
-          keyboardType="visible-password"
+          keyboardType="default"
           inputMode="text"
           onChangeText={(value) => {
-            setTruckNo(value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10));
+            setTruckNo(value.toUpperCase());
             setOpenSuggestions(true);
           }}
           onFocus={() => setOpenSuggestions(true)}
