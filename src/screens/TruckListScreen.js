@@ -22,17 +22,28 @@ export default function TruckListScreen({ navigation }) {
         const trip = calcTruckTrip(rawTruck, trucks);
         const truck = { ...rawTruck, trip };
         return (
-          <Pressable key={truck.id} style={styles.entry} onPress={() => navigation.navigate('Truck', { truck })}>
-            <View style={styles.entryBody}>
+          <View key={truck.id} style={styles.entry}>
+            <Pressable style={styles.entryBody} onPress={() => navigation.navigate('Truck', { truck })}>
               <View style={styles.entryTop}>
                 <Text style={styles.sno}>S.no: {truck.sno} · Trip {trip}</Text>
                 <Text style={styles.rrNo}>RR No: {truck.rrNo}</Text>
               </View>
               <Text style={styles.entryTitle}>{truck.truckNo}</Text>
               <Text style={styles.route}>{truck.stationFrom || '—'} → {truck.stationTo || '—'}</Text>
+              <Text style={styles.deliveryText}>Delivery: {truck.deliveryTo || '—'}</Text>
+            </Pressable>
+            <View style={styles.actionsRight}>
+              <Pressable
+                style={styles.cardEditBtn}
+                onPress={() => navigation.navigate('Truck', { truck, autoEdit: true })}
+              >
+                <Text style={styles.cardEditBtnText}>Edit</Text>
+              </Pressable>
+              <Pressable onPress={() => navigation.navigate('Truck', { truck })}>
+                <View style={styles.chevronRight} />
+              </Pressable>
             </View>
-            <View style={styles.chevronRight} />
-          </Pressable>
+          </View>
         );
       })}
       {!trucks.length && !error ? <Text style={styles.empty}>No truck saved yet</Text> : null}
@@ -48,7 +59,11 @@ const styles = StyleSheet.create({
   sno: { fontWeight: '700', color: colors.ink },
   entryTitle: { fontSize: 18, fontWeight: '700', color: colors.ink, letterSpacing: 1 },
   route: { color: colors.muted },
+  deliveryText: { color: colors.greenDeep, fontSize: 13, fontWeight: '700' },
   rrNo: { fontWeight: '700', color: colors.green },
+  actionsRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  cardEditBtn: { backgroundColor: '#1d4ed8', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  cardEditBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 13 },
   chevronRight: { width: 9, height: 9, borderRightWidth: 2, borderTopWidth: 2, borderColor: colors.green, transform: [{ rotate: '45deg' }] },
   empty: { color: colors.muted },
   error: { backgroundColor: colors.dangerSoft, color: colors.danger, padding: 12, borderRadius: 12 },

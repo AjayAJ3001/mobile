@@ -125,6 +125,7 @@ function sendFormDataWithXhr(url, { method = 'POST', headers = {}, body, timeout
             : `Request failed (HTTP ${xhr.status}).`;
         const err = new Error(data.error || fallback);
         err.payload = data;
+        err.status = xhr.status;
         reject(err);
       }
     };
@@ -174,6 +175,7 @@ export async function api(path, options = {}) {
         : `Request failed (HTTP ${response.status}).`;
     const error = new Error(data.error || fallback);
     error.payload = data;
+    error.status = response.status;
     throw error;
   }
   return data;

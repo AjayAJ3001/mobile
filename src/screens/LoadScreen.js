@@ -248,11 +248,29 @@ export default function LoadScreen({ route, navigation }) {
           body: payload,
         });
       } catch (putErr) {
-        if (putErr.message && (putErr.message.includes('404') || putErr.message.includes('Cannot PUT'))) {
-          data = await api('/api/loads', {
-            method: 'POST',
-            body: payload,
-          });
+        if (putErr.status === 404 || (putErr.message && (putErr.message.includes('404') || putErr.message.includes('Cannot PUT')))) {
+          try {
+            data = await api('/api/loads', {
+              method: 'POST',
+              body: payload,
+            });
+          } catch (postErr) {
+            if (postErr.message && postErr.message.includes('already has a load')) {
+              try {
+                const truckData = await api(`/api/trucks/${truck.id}`, { method: 'PUT', body: payload })
+                  .catch(() => api(`/api/trucks/${truck.id}`, { method: 'POST', body: payload }));
+                if (truckData?.truck) {
+                  data = { truck: { ...truckData.truck, load: truck.load } };
+                } else {
+                  throw postErr;
+                }
+              } catch {
+                throw postErr;
+              }
+            } else {
+              throw postErr;
+            }
+          }
         } else {
           throw putErr;
         }
