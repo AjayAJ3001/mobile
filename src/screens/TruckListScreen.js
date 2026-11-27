@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
+import { calcTruckTrip } from '../truckTrip';
 import { colors } from '../theme';
 
 export default function TruckListScreen({ navigation }) {
@@ -17,19 +18,23 @@ export default function TruckListScreen({ navigation }) {
   return (
     <ScrollView contentContainerStyle={styles.page}>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {trucks.map((truck) => (
-        <Pressable key={truck.id} style={styles.entry} onPress={() => navigation.navigate('Truck', { truck })}>
-          <View style={styles.entryBody}>
-            <View style={styles.entryTop}>
-              <Text style={styles.sno}>S.no: {truck.sno} · Trip {truck.trip || 1}</Text>
-              <Text style={styles.rrNo}>RR No: {truck.rrNo}</Text>
+      {trucks.map((rawTruck) => {
+        const trip = calcTruckTrip(rawTruck, trucks);
+        const truck = { ...rawTruck, trip };
+        return (
+          <Pressable key={truck.id} style={styles.entry} onPress={() => navigation.navigate('Truck', { truck })}>
+            <View style={styles.entryBody}>
+              <View style={styles.entryTop}>
+                <Text style={styles.sno}>S.no: {truck.sno} · Trip {trip}</Text>
+                <Text style={styles.rrNo}>RR No: {truck.rrNo}</Text>
+              </View>
+              <Text style={styles.entryTitle}>{truck.truckNo}</Text>
+              <Text style={styles.route}>{truck.stationFrom || '—'} → {truck.stationTo || '—'}</Text>
             </View>
-            <Text style={styles.entryTitle}>{truck.truckNo}</Text>
-            <Text style={styles.route}>{truck.stationFrom || '—'} → {truck.stationTo || '—'}</Text>
-          </View>
-          <View style={styles.chevronRight} />
-        </Pressable>
-      ))}
+            <View style={styles.chevronRight} />
+          </Pressable>
+        );
+      })}
       {!trucks.length && !error ? <Text style={styles.empty}>No truck saved yet</Text> : null}
     </ScrollView>
   );

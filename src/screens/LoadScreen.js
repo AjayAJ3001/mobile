@@ -94,7 +94,7 @@ export default function LoadScreen({ route, navigation }) {
     setError('');
     try {
       const data = await api('/api/loads', { method: 'POST', body: { truckId: truck.id, bags: count, setNo, wagonId: selectedWagon.id } });
-      setTruck(data.truck);
+      setTruck({ ...data.truck, trip: data.truck?.trip || truck.trip });
     } catch (err) {
       setError(err.message);
     } finally {

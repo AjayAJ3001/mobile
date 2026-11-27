@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
+import { calcTruckTrip } from '../truckTrip';
 import { colors } from '../theme';
 
 function Field({ label, value }) {
@@ -63,13 +64,15 @@ export default function LoadsScreen({ navigation }) {
           </View>
           <Field label="Commodity" value={opened.commodity} />
           <Field label="Party name" value={opened.partyName} />
-          {openedTrucks.map((truck) => {
+          {openedTrucks.map((rawTruck) => {
+            const trip = calcTruckTrip(rawTruck, openedTrucks);
+            const truck = { ...rawTruck, trip };
             const filled = Boolean(truck.load);
             return (
               <Pressable key={truck.id} style={[styles.entry, filled && styles.filled]} onPress={() => navigation.navigate('Load', { truck })}>
                 <View style={styles.entryBody}>
-                  <Text style={[styles.sno, filled && styles.filledText]}>S.no: {truck.sno} · Trip {truck.trip || 1}</Text>
-                  <Text style={[styles.truckNo, filled && styles.filledText]}>{truck.truckNo} (Trip {truck.trip || 1})</Text>
+                  <Text style={[styles.sno, filled && styles.filledText]}>S.no: {truck.sno} · Trip {trip}</Text>
+                  <Text style={[styles.truckNo, filled && styles.filledText]}>{truck.truckNo} (Trip {trip})</Text>
                   <Text style={[styles.route, filled && styles.filledText]}>
                     {filled
                       ? `Bags ${truck.load.bags} · Set ${truck.load.setNo} · Wagon ${truck.load.wagonNo || '—'} · ${truck.deliveryTo || '—'}`

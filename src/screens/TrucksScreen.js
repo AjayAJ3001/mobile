@@ -86,7 +86,7 @@ export default function TrucksScreen({ navigation }) {
     setBusy(true);
     setError('');
     try {
-      await api('/api/trucks', { method: 'POST', body: { receiptId: selected.id, truckNo, partyId: party.id, unitId: unit.id } });
+      await api('/api/trucks', { method: 'POST', body: { receiptId: selected.id, truckNo, partyId: party.id, unitId: unit.id, trip: currentTrip } });
       setUnitId(defaultUnitId(party));
       setTruckNo('');
       load();
