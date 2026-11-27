@@ -9,6 +9,17 @@ function setChoices(truck) {
   return Array.from({ length: 18 }, (_, index) => ({ setNo: String(index + 1), totalBags: null, balanceBags: null }));
 }
 
+function matchParty(parties, typed) {
+  const query = String(typed || '').trim().toLowerCase();
+  if (!query) return null;
+  const exact = parties.find((item) => item.name.toLowerCase() === query);
+  if (exact) return exact;
+  return parties.find((item) => {
+    const name = item.name.toLowerCase();
+    return name.includes(query) || query.includes(name);
+  }) || null;
+}
+
 function Field({ label, value }) {
   return (
     <View style={styles.pairItem}>
@@ -57,6 +68,7 @@ export default function LoadScreen({ route, navigation }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTruckNo, setEditTruckNo] = useState('');
   const [editUnitId, setEditUnitId] = useState(null);
+  const [editDeliveryTo, setEditDeliveryTo] = useState('');
   const [editUnitOpen, setEditUnitOpen] = useState(false);
   const [partyUnits, setPartyUnits] = useState(route.params.truck?.partyUnits || []);
   const [error, setError] = useState('');
@@ -73,28 +85,48 @@ export default function LoadScreen({ route, navigation }) {
     setIsEditing(false);
     setEditTruckNo(cur.truckNo || '');
     setEditUnitId(cur.unitId || null);
+    setEditDeliveryTo(cur.deliveryTo || '');
     setEditUnitOpen(false);
     setPartyUnits(cur.partyUnits || []);
     setError('');
   }, [route.params.truck]);
 
-  // Fetch party units if not already passed
+  // Load available delivery units reliably from api
   useEffect(() => {
-    if (!partyUnits.length && truck?.partyName) {
-      api('/api/loads')
-        .then((data) => {
-          const matching = (data.trucks || []).find((t) => t.id === truck.id);
-          if (matching?.partyUnits?.length) {
-            setPartyUnits(matching.partyUnits);
-            if (!editUnitId && matching.unitId) setEditUnitId(matching.unitId);
-          } else if (data.parties?.length) {
-            const p = data.parties.find((item) => item.name === truck.partyName || item.id === truck.partyId);
-            if (p?.units?.length) setPartyUnits(p.units);
+    api('/api/trucks')
+      .then((data) => {
+        const allParties = data.parties || [];
+        const party = matchParty(allParties, truck.partyName) || allParties.find((p) => p.id === truck.partyId);
+        let units = party?.units || [];
+        if (!units.length) {
+          // Gather all active units across all parties as fallback
+          const seen = new Set();
+          const list = [];
+          for (const p of allParties) {
+            for (const u of (p.units || [])) {
+              const key = u.name.trim().toLowerCase();
+              if (!seen.has(key)) {
+                seen.add(key);
+                list.push(u);
+              }
+            }
           }
-        })
-        .catch(() => {});
-    }
-  }, [truck?.id, truck?.partyName, truck?.partyId, partyUnits.length, editUnitId]);
+          units = list;
+        }
+        if (units.length) {
+          setPartyUnits(units);
+          const currentName = (editDeliveryTo || truck.deliveryTo || '').trim().toLowerCase();
+          if (currentName) {
+            const matched = units.find((u) => u.name.trim().toLowerCase() === currentName);
+            if (matched) {
+              setEditUnitId(matched.id);
+              if (!editDeliveryTo) setEditDeliveryTo(matched.name);
+            }
+          }
+        }
+      })
+      .catch(() => {});
+  }, [truck?.partyName, truck?.partyId, truck?.deliveryTo, editDeliveryTo]);
 
   const saved = Boolean(truck.load);
   const choices = setChoices(truck);
@@ -106,6 +138,7 @@ export default function LoadScreen({ route, navigation }) {
   function startEditing() {
     setEditTruckNo(truck.truckNo || '');
     setEditUnitId(truck.unitId || null);
+    setEditDeliveryTo(truck.deliveryTo || '');
     setBags(truck.load?.bags ? String(truck.load.bags) : '');
     setSetNo(truck.load?.setNo ? Number(truck.load.setNo) : null);
     setWagonId(truck.load?.wagonId || null);
@@ -119,6 +152,7 @@ export default function LoadScreen({ route, navigation }) {
   function cancelEditing() {
     setEditTruckNo(truck.truckNo || '');
     setEditUnitId(truck.unitId || null);
+    setEditDeliveryTo(truck.deliveryTo || '');
     setBags('');
     setSetNo(null);
     setWagonId(null);
@@ -186,6 +220,7 @@ export default function LoadScreen({ route, navigation }) {
     }
     setBusy(true);
     setError('');
+    const resolvedDelivery = selectedUnit?.name || editDeliveryTo || truck.deliveryTo;
     try {
       const data = await api(`/api/loads/${truck.id}`, {
         method: 'PUT',
@@ -193,12 +228,17 @@ export default function LoadScreen({ route, navigation }) {
           truckId: truck.id,
           truckNo: editTruckNo.trim().toUpperCase(),
           unitId: editUnitId,
+          deliveryTo: resolvedDelivery,
           bags: count,
           setNo,
           wagonId: selectedWagon.id,
         },
       });
-      setTruck({ ...data.truck, partyUnits: data.truck?.partyUnits?.length ? data.truck.partyUnits : partyUnits });
+      setTruck({
+        ...data.truck,
+        deliveryTo: resolvedDelivery || data.truck?.deliveryTo,
+        partyUnits: data.truck?.partyUnits?.length ? data.truck.partyUnits : partyUnits,
+      });
       setIsEditing(false);
     } catch (err) {
       setError(err.message);
@@ -215,6 +255,8 @@ export default function LoadScreen({ route, navigation }) {
       setError(err.message);
     }
   }
+
+  const displayedDeliveryTo = selectedUnit?.name || editDeliveryTo || truck.deliveryTo;
 
   return (
     <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
@@ -250,28 +292,34 @@ export default function LoadScreen({ route, navigation }) {
               style={styles.dropdown}
               onPress={() => setEditUnitOpen((open) => !open)}
             >
-              <Text style={selectedUnit || truck.deliveryTo ? styles.dropdownText : styles.dropdownPlaceholder}>
-                {selectedUnit?.name || truck.deliveryTo || 'Choose delivery to'}
+              <Text style={displayedDeliveryTo ? styles.dropdownText : styles.dropdownPlaceholder}>
+                {displayedDeliveryTo || 'Choose delivery to'}
               </Text>
               <View style={[styles.chevron, editUnitOpen && styles.chevronUp]} />
             </Pressable>
             {editUnitOpen ? (
               <View style={styles.menu}>
-                {partyUnits.map((item) => (
-                  <Pressable
-                    key={item.id}
-                    style={[styles.menuItem, item.id === editUnitId && styles.optionOn]}
-                    onPress={() => {
-                      setEditUnitId(item.id);
-                      setEditUnitOpen(false);
-                    }}
-                  >
-                    <Text style={item.id === editUnitId ? styles.optionOnText : styles.optionText}>
-                      {item.name}
-                    </Text>
-                  </Pressable>
-                ))}
-                {!partyUnits.length ? <Text style={styles.menuItem}>No delivery units available for this party.</Text> : null}
+                {partyUnits.map((item) => {
+                  const isSelected = item.id === editUnitId || item.name.toLowerCase() === (displayedDeliveryTo || '').toLowerCase();
+                  return (
+                    <Pressable
+                      key={item.id}
+                      style={[styles.menuItem, isSelected && styles.optionOn]}
+                      onPress={() => {
+                        setEditUnitId(item.id);
+                        setEditDeliveryTo(item.name);
+                        setEditUnitOpen(false);
+                      }}
+                    >
+                      <Text style={isSelected ? styles.optionOnText : styles.optionText}>
+                        {item.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                {!partyUnits.length ? (
+                  <Text style={[styles.menuItem, { color: colors.muted }]}>Loading delivery units…</Text>
+                ) : null}
               </View>
             ) : null}
 
