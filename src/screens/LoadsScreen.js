@@ -33,6 +33,11 @@ export default function LoadsScreen({ navigation }) {
 
   const opened = sources.find((source) => source.id === openId) || null;
   const openedTrucks = opened ? trucks.filter((truck) => truck.receiptId === opened.id) : [];
+  const loadedTrucks = openedTrucks.filter((truck) => truck.load?.bags != null);
+  const totalBagsTaken = loadedTrucks.reduce((sum, t) => sum + (Number(t.load.bags) || 0), 0);
+  const openedSets = openedTrucks[0]?.sets || [];
+  const totalBags = openedSets.reduce((sum, s) => sum + (Number(s.totalBags) || 0), 0);
+  const balanceBags = totalBags > 0 ? totalBags - totalBagsTaken : null;
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
@@ -64,6 +69,23 @@ export default function LoadsScreen({ navigation }) {
           </View>
           <Field label="Commodity" value={opened.commodity} />
           <Field label="Party name" value={opened.partyName} />
+
+          <View style={styles.statsBar}>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Trucks loaded</Text>
+              <Text style={styles.statValue}>{loadedTrucks.length} / {openedTrucks.length}</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Total bags taken</Text>
+              <Text style={[styles.statValue, { color: colors.green }]}>{totalBagsTaken}</Text>
+            </View>
+            {totalBags > 0 ? (
+              <View style={styles.statBox}>
+                <Text style={styles.statLabel}>Balance bags</Text>
+                <Text style={[styles.statValue, { color: balanceBags < 0 ? colors.danger : colors.ink }]}>{balanceBags}</Text>
+              </View>
+            ) : null}
+          </View>
           {openedTrucks.map((rawTruck) => {
             const trip = calcTruckTrip(rawTruck, openedTrucks);
             const truck = { ...rawTruck, trip };
@@ -119,6 +141,10 @@ const styles = StyleSheet.create({
   pairItem: { flex: 1, gap: 2 },
   pairLabel: { color: colors.muted, fontSize: 12, fontWeight: '700' },
   pairValue: { color: colors.ink, fontSize: 15, fontWeight: '700' },
+  statsBar: { flexDirection: 'row', gap: 8, backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 12, padding: 10, marginVertical: 4 },
+  statBox: { flex: 1, alignItems: 'center' },
+  statLabel: { fontSize: 11, fontWeight: '700', color: colors.muted, marginBottom: 2 },
+  statValue: { fontSize: 16, fontWeight: '800', color: colors.ink },
   picks: { gap: 8 },
   lead: { fontWeight: '800', color: colors.ink },
   entry: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.panel, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: colors.line, gap: 10 },

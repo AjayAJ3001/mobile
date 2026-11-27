@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { api } from '../api';
 import { downloadLoad, printLoad, shareLoad } from '../loadFile';
 import { colors } from '../theme';
@@ -196,52 +196,88 @@ export default function LoadScreen({ route, navigation }) {
   async function saveEdit() {
     const count = Number(bags);
     if (!editTruckNo.trim()) {
-      setError('Enter the truck number.');
+      const msg = 'Enter the truck number.';
+      setError(msg);
+      Alert.alert('Validation Error', msg);
       return;
     }
     if (!Number.isInteger(count) || count < 1) {
-      setError('Enter the number of bags.');
+      const msg = 'Enter the number of bags.';
+      setError(msg);
+      Alert.alert('Validation Error', msg);
       return;
     }
     if (!setNo) {
-      setError('Choose a set number.');
+      const msg = 'Choose a set number.';
+      setError(msg);
+      Alert.alert('Validation Error', msg);
       return;
     }
     if (!selectedWagon) {
-      setError('Choose the wagon number.');
+      const msg = 'Choose the wagon number.';
+      setError(msg);
+      Alert.alert('Validation Error', msg);
       return;
     }
     const currentWagonBalance = selectedWagon.id === truck.load?.wagonId
       ? selectedWagon.balanceBags + Number(truck.load?.bags || 0)
       : selectedWagon.balanceBags;
     if (count > currentWagonBalance) {
-      setError(`Wagon ${selectedWagon.wagonNo} has ${currentWagonBalance} bags left.`);
+      const msg = `Wagon ${selectedWagon.wagonNo} has ${currentWagonBalance} bags left.`;
+      setError(msg);
+      Alert.alert('Wagon Limit Exceeded', msg);
       return;
     }
     setBusy(true);
     setError('');
     const resolvedDelivery = selectedUnit?.name || editDeliveryTo || truck.deliveryTo;
+    const payload = {
+      truckId: truck.id,
+      truckNo: editTruckNo.trim().toUpperCase(),
+      unitId: editUnitId,
+      deliveryTo: resolvedDelivery,
+      bags: count,
+      setNo,
+      wagonId: selectedWagon.id,
+    };
     try {
-      const data = await api(`/api/loads/${truck.id}`, {
-        method: 'PUT',
-        body: {
-          truckId: truck.id,
-          truckNo: editTruckNo.trim().toUpperCase(),
-          unitId: editUnitId,
-          deliveryTo: resolvedDelivery,
+      let data;
+      try {
+        data = await api(`/api/loads/${truck.id}`, {
+          method: 'PUT',
+          body: payload,
+        });
+      } catch (putErr) {
+        if (putErr.message && (putErr.message.includes('404') || putErr.message.includes('Cannot PUT'))) {
+          data = await api('/api/loads', {
+            method: 'POST',
+            body: payload,
+          });
+        } else {
+          throw putErr;
+        }
+      }
+      const updatedTruck = {
+        ...truck,
+        ...(data?.truck || {}),
+        truckNo: editTruckNo.trim().toUpperCase(),
+        deliveryTo: resolvedDelivery || data?.truck?.deliveryTo || truck.deliveryTo,
+        partyUnits: data?.truck?.partyUnits?.length ? data.truck.partyUnits : partyUnits,
+        load: {
+          ...(truck.load || {}),
+          ...(data?.truck?.load || {}),
           bags: count,
-          setNo,
+          setNo: setNo,
           wagonId: selectedWagon.id,
+          wagonNo: selectedWagon.wagonNo || data?.truck?.load?.wagonNo || truck.load?.wagonNo || '',
         },
-      });
-      setTruck({
-        ...data.truck,
-        deliveryTo: resolvedDelivery || data.truck?.deliveryTo,
-        partyUnits: data.truck?.partyUnits?.length ? data.truck.partyUnits : partyUnits,
-      });
+      };
+      setTruck(updatedTruck);
       setIsEditing(false);
+      Alert.alert('Success', 'Load details updated successfully!');
     } catch (err) {
       setError(err.message);
+      Alert.alert('Update Error', err.message);
     } finally {
       setBusy(false);
     }
@@ -408,6 +444,7 @@ export default function LoadScreen({ route, navigation }) {
               </View>
             ) : null}
 
+            {error ? <Text style={[styles.error, { marginTop: 10 }]}>{error}</Text> : null}
             <Pressable style={styles.primary} disabled={busy} onPress={saveEdit}>
               <Text style={styles.primaryText}>{busy ? 'Saving changes…' : 'Save Changes'}</Text>
             </Pressable>
