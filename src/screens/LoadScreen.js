@@ -149,20 +149,29 @@ export default function LoadScreen({ route, navigation }) {
   const choices = setChoices(truck);
   const selectedSet = choices.find((item) => Number(item.setNo) === Number(setNo)) || (saved ? choices.find((item) => Number(item.setNo) === Number(truck.load.setNo)) : null);
   const wagons = selectedSet?.wagons || [];
-  const selectedWagon = wagons.find((item) => item.id === wagonId) || (saved ? wagons.find((item) => item.id === truck.load?.wagonId) : null);
+  const selectedWagon = wagons.find((item) => Number(item.id) === Number(wagonId)) || (saved ? wagons.find((item) => Number(item.id) === Number(truck.load?.wagonId)) : null);
   const selectedUnit = partyUnits.find((u) => u.id === editUnitId) || null;
 
   const existingBags = Number(truck.load?.bags || 0);
-  const existingWagonId = truck.load?.wagonId;
-  const existingSetNo = Number(truck.load?.setNo || 0);
+  const existingWagonId = truck.load?.wagonId != null ? Number(truck.load.wagonId) : null;
+  const existingSetNo = truck.load?.setNo != null ? Number(truck.load.setNo) : null;
 
-  const isSameWagon = selectedWagon && existingWagonId && selectedWagon.id === existingWagonId;
-  const wagonAvail = selectedWagon ? (selectedWagon.balanceBags + (isSameWagon ? existingBags : 0)) : 0;
-  const wagonRemaining = selectedWagon ? wagonAvail - (Number(bags) || 0) : null;
+  const wagonTotal = Number(selectedWagon?.articleCount || 0);
+  const typedCount = Number(bags) || 0;
+  const wagonRemaining = wagonTotal > 0 ? (wagonTotal - typedCount) : null;
 
-  const isSameSet = selectedSet && existingSetNo && Number(selectedSet.setNo) === existingSetNo;
-  const setAvail = selectedSet ? ((Number(selectedSet.balanceBags) || 0) + (isSameSet ? existingBags : 0)) : 0;
-  const setRemaining = selectedSet ? setAvail - (Number(bags) || 0) : null;
+  const setTotal = Number(selectedSet?.totalBags || wagonTotal);
+  const setRemaining = setTotal > 0 ? (setTotal - typedCount) : null;
+
+  // "Available" for the balance card in edit mode: add back existing bags so user sees true remaining
+  const isSameWagonEdit = existingWagonId != null && selectedWagon != null && Number(selectedWagon.id) === existingWagonId;
+  const isSameSetEdit = existingSetNo != null && selectedSet != null && Number(selectedSet.setNo) === existingSetNo;
+  const wagonAvail = selectedWagon
+    ? (isSameWagonEdit ? Number(selectedWagon.balanceBags || 0) + existingBags : Number(selectedWagon.balanceBags || 0))
+    : 0;
+  const setAvail = selectedSet
+    ? (isSameSetEdit ? Number(selectedSet.balanceBags || 0) + existingBags : Number(selectedSet.balanceBags || 0))
+    : 0;
 
   function startEditing() {
     setEditTruckNo(truck.truckNo || '');
@@ -206,8 +215,8 @@ export default function LoadScreen({ route, navigation }) {
       setError('Choose the wagon number.');
       return;
     }
-    if (count > selectedWagon.balanceBags) {
-      setError(`Wagon ${selectedWagon.wagonNo} has ${selectedWagon.balanceBags} bags left.`);
+    if (wagonTotal > 0 && count > wagonTotal) {
+      setError(`Wagon ${selectedWagon.wagonNo} only has ${wagonTotal} total bags.`);
       return;
     }
     setBusy(true);
@@ -248,16 +257,10 @@ export default function LoadScreen({ route, navigation }) {
       Alert.alert('Validation Error', msg);
       return;
     }
-    if (count > wagonAvail) {
-      const msg = `Wagon ${selectedWagon.wagonNo} has ${wagonAvail} bags available.`;
+    if (wagonTotal > 0 && count > wagonTotal) {
+      const msg = `Wagon ${selectedWagon.wagonNo} only has ${wagonTotal} total bags.`;
       setError(msg);
       Alert.alert('Wagon Limit Exceeded', msg);
-      return;
-    }
-    if (selectedSet && count > setAvail) {
-      const msg = `Set ${selectedSet.setNo} has ${setAvail} bags available.`;
-      setError(msg);
-      Alert.alert('Set Limit Exceeded', msg);
       return;
     }
     setBusy(true);
@@ -308,17 +311,16 @@ export default function LoadScreen({ route, navigation }) {
         }
       }
       const mathematicallyUpdatedSets = choices.map((s) => {
-        let setBags = Number(s.balanceBags || 0);
-        if (Number(s.setNo) === existingSetNo) setBags += existingBags;
-        if (Number(s.setNo) === setNo) setBags -= count;
+        const sTotal = Number(s.totalBags || 0);
         return {
           ...s,
-          balanceBags: setBags,
+          balanceBags: sTotal > 0 ? Math.max(0, sTotal - count) : s.balanceBags,
           wagons: (s.wagons || []).map((w) => {
-            let wBags = Number(w.balanceBags || 0);
-            if (w.id === existingWagonId) wBags += existingBags;
-            if (w.id === selectedWagon.id) wBags -= count;
-            return { ...w, balanceBags: wBags };
+            const wTotal = Number(w.articleCount || 0);
+            if (Number(w.id) === Number(selectedWagon.id)) {
+              return { ...w, balanceBags: wTotal > 0 ? Math.max(0, wTotal - count) : (Number(w.balanceBags || 0) - count) };
+            }
+            return w;
           }),
         };
       });
@@ -545,11 +547,11 @@ export default function LoadScreen({ route, navigation }) {
                 <Text style={styles.row}><Text style={styles.rowLabel}>Bags: </Text><Text style={{ fontWeight: '800', color: colors.greenDeep }}>{truck.load.bags}</Text></Text>
                 <Text style={styles.row}>
                   <Text style={styles.rowLabel}>Set no: </Text>
-                  Set {truck.load.setNo} {selectedSet?.balanceBags != null ? `(Total: ${selectedSet.totalBags || '—'} · Balance: ${selectedSet.balanceBags})` : ''}
+                  Set {truck.load.setNo} {selectedSet?.totalBags ? `(Total: ${selectedSet.totalBags} · Balance: ${Math.max(0, Number(selectedSet.totalBags) - Number(truck.load.bags))})` : (selectedSet?.balanceBags != null ? `(Balance: ${selectedSet.balanceBags})` : '')}
                 </Text>
                 <Text style={styles.row}>
                   <Text style={styles.rowLabel}>Wagon no: </Text>
-                  {truck.load.wagonNo || '—'} {selectedWagon ? `(Articles: ${selectedWagon.articleCount} · Balance: ${selectedWagon.balanceBags})` : ''}
+                  {truck.load.wagonNo || '—'} {selectedWagon?.articleCount ? `(Total: ${selectedWagon.articleCount} · Balance: ${Math.max(0, Number(selectedWagon.articleCount) - Number(truck.load.bags))})` : (selectedWagon?.balanceBags != null ? `(Balance: ${selectedWagon.balanceBags})` : '')}
                 </Text>
                 <View style={styles.actions}>
                   <Pressable style={[styles.action, styles.editAction]} onPress={startEditing}>
