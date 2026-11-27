@@ -128,12 +128,41 @@ export default function LoadScreen({ route, navigation }) {
       .catch(() => {});
   }, [truck?.partyName, truck?.partyId, truck?.deliveryTo, editDeliveryTo]);
 
+  // Load latest load and sets balances from api
+  useEffect(() => {
+    api('/api/loads')
+      .then((data) => {
+        const fresh = (data.trucks || []).find((t) => t.id === truck.id);
+        if (fresh) {
+          setTruck((prev) => ({
+            ...prev,
+            ...fresh,
+            sets: fresh.sets || prev.sets,
+            partyUnits: fresh.partyUnits?.length ? fresh.partyUnits : prev.partyUnits,
+          }));
+        }
+      })
+      .catch(() => {});
+  }, [truck?.id]);
+
   const saved = Boolean(truck.load);
   const choices = setChoices(truck);
   const selectedSet = choices.find((item) => Number(item.setNo) === Number(setNo)) || (saved ? choices.find((item) => Number(item.setNo) === Number(truck.load.setNo)) : null);
   const wagons = selectedSet?.wagons || [];
   const selectedWagon = wagons.find((item) => item.id === wagonId) || (saved ? wagons.find((item) => item.id === truck.load?.wagonId) : null);
   const selectedUnit = partyUnits.find((u) => u.id === editUnitId) || null;
+
+  const existingBags = Number(truck.load?.bags || 0);
+  const existingWagonId = truck.load?.wagonId;
+  const existingSetNo = Number(truck.load?.setNo || 0);
+
+  const isSameWagon = selectedWagon && existingWagonId && selectedWagon.id === existingWagonId;
+  const wagonAvail = selectedWagon ? (selectedWagon.balanceBags + (isSameWagon ? existingBags : 0)) : 0;
+  const wagonRemaining = selectedWagon ? wagonAvail - (Number(bags) || 0) : null;
+
+  const isSameSet = selectedSet && existingSetNo && Number(selectedSet.setNo) === existingSetNo;
+  const setAvail = selectedSet ? ((Number(selectedSet.balanceBags) || 0) + (isSameSet ? existingBags : 0)) : 0;
+  const setRemaining = selectedSet ? setAvail - (Number(bags) || 0) : null;
 
   function startEditing() {
     setEditTruckNo(truck.truckNo || '');
@@ -219,13 +248,16 @@ export default function LoadScreen({ route, navigation }) {
       Alert.alert('Validation Error', msg);
       return;
     }
-    const currentWagonBalance = selectedWagon.id === truck.load?.wagonId
-      ? selectedWagon.balanceBags + Number(truck.load?.bags || 0)
-      : selectedWagon.balanceBags;
-    if (count > currentWagonBalance) {
-      const msg = `Wagon ${selectedWagon.wagonNo} has ${currentWagonBalance} bags left.`;
+    if (count > wagonAvail) {
+      const msg = `Wagon ${selectedWagon.wagonNo} has ${wagonAvail} bags available.`;
       setError(msg);
       Alert.alert('Wagon Limit Exceeded', msg);
+      return;
+    }
+    if (selectedSet && count > setAvail) {
+      const msg = `Set ${selectedSet.setNo} has ${setAvail} bags available.`;
+      setError(msg);
+      Alert.alert('Set Limit Exceeded', msg);
       return;
     }
     setBusy(true);
@@ -275,12 +307,29 @@ export default function LoadScreen({ route, navigation }) {
           throw putErr;
         }
       }
+      const mathematicallyUpdatedSets = choices.map((s) => {
+        let setBags = Number(s.balanceBags || 0);
+        if (Number(s.setNo) === existingSetNo) setBags += existingBags;
+        if (Number(s.setNo) === setNo) setBags -= count;
+        return {
+          ...s,
+          balanceBags: setBags,
+          wagons: (s.wagons || []).map((w) => {
+            let wBags = Number(w.balanceBags || 0);
+            if (w.id === existingWagonId) wBags += existingBags;
+            if (w.id === selectedWagon.id) wBags -= count;
+            return { ...w, balanceBags: wBags };
+          }),
+        };
+      });
+
       const updatedTruck = {
         ...truck,
         ...(data?.truck || {}),
         truckNo: editTruckNo.trim().toUpperCase(),
         deliveryTo: resolvedDelivery || data?.truck?.deliveryTo || truck.deliveryTo,
         partyUnits: data?.truck?.partyUnits?.length ? data.truck.partyUnits : partyUnits,
+        sets: data?.truck?.sets?.length ? data.truck.sets : mathematicallyUpdatedSets,
         load: {
           ...(truck.load || {}),
           ...(data?.truck?.load || {}),
@@ -396,22 +445,25 @@ export default function LoadScreen({ route, navigation }) {
             </Pressable>
             {setOpen ? (
               <View style={styles.menu}>
-                {choices.map((item) => (
-                  <Pressable
-                    key={item.setNo}
-                    style={[styles.menuItem, Number(item.setNo) === setNo && styles.optionOn]}
-                    onPress={() => {
-                      setSetNo(Number(item.setNo));
-                      setWagonId(null);
-                      setSetOpen(false);
-                      setWagonOpen(false);
-                    }}
-                  >
-                    <Text style={Number(item.setNo) === setNo ? styles.optionOnText : styles.optionText}>
-                      {item.balanceBags == null ? `Set ${item.setNo}` : `Set ${item.setNo} · balance ${item.balanceBags}`}
-                    </Text>
-                  </Pressable>
-                ))}
+                {choices.map((item) => {
+                  const sAvail = Number(item.balanceBags || 0) + (Number(item.setNo) === existingSetNo ? existingBags : 0);
+                  return (
+                    <Pressable
+                      key={item.setNo}
+                      style={[styles.menuItem, Number(item.setNo) === setNo && styles.optionOn]}
+                      onPress={() => {
+                        setSetNo(Number(item.setNo));
+                        setWagonId(null);
+                        setSetOpen(false);
+                        setWagonOpen(false);
+                      }}
+                    >
+                      <Text style={Number(item.setNo) === setNo ? styles.optionOnText : styles.optionText}>
+                        {item.balanceBags == null ? `Set ${item.setNo}` : `Set ${item.setNo} · balance ${sAvail}`}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             ) : null}
 
@@ -427,15 +479,28 @@ export default function LoadScreen({ route, navigation }) {
               <View style={[styles.chevron, wagonOpen && styles.chevronUp]} />
             </Pressable>
             {selectedWagon ? (
-              <>
-                <Text style={styles.row}><Text style={styles.rowLabel}>Articles: </Text>{selectedWagon.articleCount}</Text>
-                <Text style={styles.row}>
-                  <Text style={styles.rowLabel}>Available balance: </Text>
-                  {selectedWagon.id === truck.load?.wagonId
-                    ? selectedWagon.balanceBags + Number(truck.load?.bags || 0)
-                    : selectedWagon.balanceBags}
-                </Text>
-              </>
+              <View style={styles.balanceCard}>
+                <View style={styles.balanceCardRow}>
+                  <Text style={styles.balanceCardLabel}>Wagon ({selectedWagon.wagonNo}):</Text>
+                  <Text style={styles.balanceCardValue}>
+                    Total: {selectedWagon.articleCount} · Available: <Text style={{ fontWeight: '800' }}>{wagonAvail}</Text>
+                  </Text>
+                </View>
+                {selectedSet ? (
+                  <View style={styles.balanceCardRow}>
+                    <Text style={styles.balanceCardLabel}>Set {selectedSet.setNo}:</Text>
+                    <Text style={styles.balanceCardValue}>
+                      Total: {selectedSet.totalBags || '—'} · Available: <Text style={{ fontWeight: '800' }}>{setAvail}</Text>
+                    </Text>
+                  </View>
+                ) : null}
+                <View style={[styles.balanceCardRow, { marginTop: 4, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#bbf7d0' }]}>
+                  <Text style={[styles.balanceCardLabel, { fontWeight: '800', color: '#166534' }]}>After this load:</Text>
+                  <Text style={[styles.balanceCardValue, { fontWeight: '800', color: (wagonRemaining ?? 0) < 0 ? colors.danger : colors.greenDeep }]}>
+                    Wagon bal: {wagonRemaining != null ? wagonRemaining : '—'} · Set bal: {setRemaining != null ? setRemaining : '—'}
+                  </Text>
+                </View>
+              </View>
             ) : null}
             {wagonOpen ? (
               <View style={styles.menu}>
@@ -477,11 +542,15 @@ export default function LoadScreen({ route, navigation }) {
               <Text style={styles.pending}>Load not entered. This RR is closed.</Text>
             ) : saved ? (
               <>
-                <Text style={styles.row}><Text style={styles.rowLabel}>Bags: </Text>{truck.load.bags}</Text>
-                <Text style={styles.row}><Text style={styles.rowLabel}>Set no: </Text>{truck.load.setNo}</Text>
-                <Text style={styles.row}><Text style={styles.rowLabel}>Wagon no: </Text>{truck.load.wagonNo || '—'}</Text>
-                <Text style={styles.row}><Text style={styles.rowLabel}>Articles: </Text>{selectedWagon?.articleCount ?? '—'}</Text>
-                <Text style={styles.row}><Text style={styles.rowLabel}>Balance bags: </Text>{selectedWagon?.balanceBags ?? '—'}</Text>
+                <Text style={styles.row}><Text style={styles.rowLabel}>Bags: </Text><Text style={{ fontWeight: '800', color: colors.greenDeep }}>{truck.load.bags}</Text></Text>
+                <Text style={styles.row}>
+                  <Text style={styles.rowLabel}>Set no: </Text>
+                  Set {truck.load.setNo} {selectedSet?.balanceBags != null ? `(Total: ${selectedSet.totalBags || '—'} · Balance: ${selectedSet.balanceBags})` : ''}
+                </Text>
+                <Text style={styles.row}>
+                  <Text style={styles.rowLabel}>Wagon no: </Text>
+                  {truck.load.wagonNo || '—'} {selectedWagon ? `(Articles: ${selectedWagon.articleCount} · Balance: ${selectedWagon.balanceBags})` : ''}
+                </Text>
                 <View style={styles.actions}>
                   <Pressable style={[styles.action, styles.editAction]} onPress={startEditing}>
                     <Text style={[styles.actionText, styles.editActionText]}>Edit</Text>
@@ -631,4 +700,8 @@ const styles = StyleSheet.create({
   cancelButtonText: { color: colors.ink, fontWeight: '700' },
   error: { backgroundColor: colors.dangerSoft, color: colors.danger, padding: 12, borderRadius: 12, marginBottom: 12 },
   pending: { backgroundColor: colors.dangerSoft, color: colors.danger, fontWeight: '700', padding: 12, borderRadius: 12 },
+  balanceCard: { backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 12, padding: 12, gap: 4, marginTop: 8 },
+  balanceCardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  balanceCardLabel: { fontSize: 13, fontWeight: '700', color: '#166534' },
+  balanceCardValue: { fontSize: 13, fontWeight: '600', color: colors.ink },
 });
