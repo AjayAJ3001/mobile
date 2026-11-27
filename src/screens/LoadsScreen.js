@@ -90,18 +90,20 @@ export default function LoadsScreen({ navigation }) {
             const trip = calcTruckTrip(rawTruck, openedTrucks);
             const truck = { ...rawTruck, trip };
             const filled = Boolean(truck.load);
+            const repeat = filled && trip > 1;
+            const textStyle = filled && (repeat ? styles.repeatText : styles.filledText);
             return (
-              <Pressable key={truck.id} style={[styles.entry, filled && styles.filled]} onPress={() => navigation.navigate('Load', { truck })}>
+              <Pressable key={truck.id} style={[styles.entry, filled && (repeat ? styles.repeat : styles.filled)]} onPress={() => navigation.navigate('Load', { truck })}>
                 <View style={styles.entryBody}>
-                  <Text style={[styles.sno, filled && styles.filledText]}>S.no: {truck.sno} · Trip {trip}</Text>
-                  <Text style={[styles.truckNo, filled && styles.filledText]}>{truck.truckNo} (Trip {trip})</Text>
-                  <Text style={[styles.route, filled && styles.filledText]}>
+                  <Text style={[styles.sno, textStyle]}>S.no: {truck.sno} · Trip {trip}</Text>
+                  <Text style={[styles.truckNo, textStyle]}>{truck.truckNo}</Text>
+                  <Text style={[styles.route, textStyle]}>
                     {filled
                       ? `Bags ${truck.load.bags} · Set ${truck.load.setNo} · Wagon ${truck.load.wagonNo || '—'} · ${truck.deliveryTo || '—'}`
                       : `Bags — · Set — · Wagon — · ${truck.deliveryTo || '—'}`}
                   </Text>
                 </View>
-                <View style={[styles.chevronRight, filled && styles.filledChevron]} />
+                <View style={[styles.chevronRight, filled && (repeat ? styles.repeatChevron : styles.filledChevron)]} />
               </Pressable>
             );
           })}
@@ -151,6 +153,9 @@ const styles = StyleSheet.create({
   filled: { backgroundColor: '#067647', borderColor: '#067647' },
   filledText: { color: '#ffffff' },
   filledChevron: { borderColor: '#ffffff' },
+  repeat: { backgroundColor: '#BAE6FD', borderColor: '#38BDF8' },
+  repeatText: { color: '#0C4A6E' },
+  repeatChevron: { borderColor: '#0C4A6E' },
   entryBody: { flex: 1, gap: 4 },
   sno: { fontWeight: '700', color: colors.ink },
   truckNo: { fontSize: 18, fontWeight: '700', color: colors.ink, letterSpacing: 1 },

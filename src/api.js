@@ -5,7 +5,7 @@ const USER = 'gs_user';
 const WORKING = 'gs_working_rr';
 
 /** Change this when the computer Wi-Fi address changes. */
-export const CURRENT_WIFI_IP = '189.72.146.91';
+export const CURRENT_WIFI_IP = '192.168.1.5';
 const API_PORT = 4000;
 
 export const COMPUTER_API = `http://${CURRENT_WIFI_IP}:${API_PORT}`;

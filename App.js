@@ -27,6 +27,7 @@ import UploadedPdfsScreen from './src/screens/UploadedPdfsScreen';
 import ReportViewScreen from './src/screens/ReportViewScreen';
 import RrCloseScreen from './src/screens/RrCloseScreen';
 import RrCloseViewScreen from './src/screens/RrCloseViewScreen';
+import RrBagViewScreen from './src/screens/RrBagViewScreen';
 import TruckDetailScreen from './src/screens/TruckDetailScreen';
 import TruckListScreen from './src/screens/TruckListScreen';
 import TrucksScreen from './src/screens/TrucksScreen';
@@ -138,6 +139,7 @@ export default function App() {
                   <Stack.Screen name="Receipt" component={ReceiptDetailScreen} options={{ title: 'RR' }} />
                   <Stack.Screen name="RrClose" component={RrCloseScreen} options={{ title: 'RR closed' }} />
                   <Stack.Screen name="RrCloseView" component={RrCloseViewScreen} options={{ title: 'View' }} />
+                  <Stack.Screen name="RrBagView" component={RrBagViewScreen} options={{ title: 'View' }} />
                 </>
               ) : (
                 <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
