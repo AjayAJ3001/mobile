@@ -39,6 +39,7 @@ export default function LoadViewScreen({ route }) {
         </View>
         <Line />
         <Text style={styles.truck}>{slip.truckNo}</Text>
+        <Row label="Trip :" value={slip.trip} />
         <Row label="Bags :" value={slip.bags} />
         <Row label="Delivery to :" value={slip.deliveryTo} />
         <Row label="Set No :" value={slip.setNo} />

@@ -58,6 +58,13 @@ export default function TrucksScreen({ navigation }) {
   const party = matchParty(data?.parties || [], selected?.partyName);
   const unit = party?.units.find((item) => item.id === unitId) || null;
 
+  const typedTruck = truckNo.trim().toUpperCase();
+  const currentTrip = selected && typedTruck
+    ? (data?.trucks || []).filter(
+        (t) => (t.receiptId === selected.id || t.rrNo === selected.rrNo) && t.truckNo.trim().toUpperCase() === typedTruck
+      ).length + 1
+    : 1;
+
   useEffect(() => {
     setUnitId(defaultUnitId(party));
     setUnitOpen(false);
@@ -124,8 +131,16 @@ export default function TrucksScreen({ navigation }) {
             </View>
           </View>
         </View>
-        <Text style={styles.label}>S.no</Text>
-        <Text style={styles.readonly}>{selected ? (data?.nextByReceipt?.[selected.id] ?? 1) : '—'}</Text>
+        <View style={styles.pair}>
+          <View style={styles.pairItem}>
+            <Text style={styles.label}>S.no</Text>
+            <Text style={styles.readonly}>{selected ? (data?.nextByReceipt?.[selected.id] ?? 1) : '—'}</Text>
+          </View>
+          <View style={styles.pairItem}>
+            <Text style={styles.label}>Trip</Text>
+            <Text style={styles.readonly}>{`Trip ${currentTrip}`}</Text>
+          </View>
+        </View>
         <Text style={styles.label}>Date</Text>
         <Text style={styles.readonly}>{data?.date ?? '—'}</Text>
         <Text style={styles.label}>Truck number</Text>

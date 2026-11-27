@@ -7,6 +7,7 @@ export function loadSlip(truck) {
   const wagon = (selected?.wagons || []).find((item) => item.id === truck.load?.wagonId) || null;
   return {
     sno: text(truck.sno),
+    trip: text(truck.trip ? `Trip ${truck.trip}` : 'Trip 1'),
     date: text(truck.date),
     truckNo: text(truck.truckNo),
     bags: text(truck.load?.bags),

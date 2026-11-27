@@ -34,8 +34,9 @@ function Details({ truck }) {
       </View>
       <View style={styles.pair}>
         <Field label="S.no" value={truck.sno} />
-        <Field label="Truck number" value={truck.truckNo} />
+        <Field label="Trip" value={`Trip ${truck.trip || 1}`} />
       </View>
+      <Field label="Truck number" value={truck.truckNo} />
       <Field label="Commodity" value={truck.commodity} />
       <Field label="Party name" value={truck.partyName} />
       <View style={styles.pair}>

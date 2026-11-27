@@ -7,7 +7,7 @@ function closedLoadHtml(report) {
   const rows = (report.trucks || []).map((truck) => `
     <tr>
       <td>${escapeHtml(truck.sno)}</td>
-      <td>${escapeHtml(truck.truckNo)}</td>
+      <td>${escapeHtml(truck.truckNo)}${truck.trip ? ` (Trip ${escapeHtml(truck.trip)})` : ''}</td>
       <td>${escapeHtml(truck.entered ? truck.setNo : 'Not entered')}</td>
       <td>${escapeHtml(truck.entered ? (truck.wagonNo || '—') : 'Not entered')}</td>
       <td>${escapeHtml(truck.entered ? truck.bags : 'Not entered')}</td>

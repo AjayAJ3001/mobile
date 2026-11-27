@@ -50,6 +50,7 @@ function loadHtml(truck) {
   </div>
   <div class="line"></div>
   <div class="truck">${show(slip.truckNo)}</div>
+  <div class="row"><span>Trip :</span><b>${show(slip.trip)}</b></div>
   <div class="row"><span>Bags :</span><b>${show(slip.bags)}</b></div>
   <div class="row"><span>Delivery to :</span><b>${show(slip.deliveryTo)}</b></div>
   <div class="row"><span>Set No :</span><b>${show(slip.setNo)}</b></div>

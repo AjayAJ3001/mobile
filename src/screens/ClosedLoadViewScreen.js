@@ -23,7 +23,7 @@ export default function ClosedLoadViewScreen({ route }) {
         ]} />
         {(report.trucks || []).map((truck) => (
           <View key={`${truck.sno}-${truck.truckNo}`} style={styles.truck}>
-            <Text style={styles.truckTitle}>{truck.sno}. {truck.truckNo}</Text>
+            <Text style={styles.truckTitle}>{truck.sno}. {truck.truckNo} (Trip {truck.trip || 1})</Text>
             <Text style={styles.muted}>
               {truck.entered ? `Set ${truck.setNo} · ${truck.wagonNo || 'wagon'} · ${truck.bags} bags · ${truck.deliveryTo || '—'}` : 'Load not entered'}
             </Text>

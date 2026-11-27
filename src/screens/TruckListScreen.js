@@ -21,7 +21,7 @@ export default function TruckListScreen({ navigation }) {
         <Pressable key={truck.id} style={styles.entry} onPress={() => navigation.navigate('Truck', { truck })}>
           <View style={styles.entryBody}>
             <View style={styles.entryTop}>
-              <Text style={styles.sno}>S.no: {truck.sno}</Text>
+              <Text style={styles.sno}>S.no: {truck.sno} · Trip {truck.trip || 1}</Text>
               <Text style={styles.rrNo}>RR No: {truck.rrNo}</Text>
             </View>
             <Text style={styles.entryTitle}>{truck.truckNo}</Text>

@@ -68,8 +68,8 @@ export default function LoadsScreen({ navigation }) {
             return (
               <Pressable key={truck.id} style={[styles.entry, filled && styles.filled]} onPress={() => navigation.navigate('Load', { truck })}>
                 <View style={styles.entryBody}>
-                  <Text style={[styles.sno, filled && styles.filledText]}>S.no: {truck.sno}</Text>
-                  <Text style={[styles.truckNo, filled && styles.filledText]}>{truck.truckNo}</Text>
+                  <Text style={[styles.sno, filled && styles.filledText]}>S.no: {truck.sno} · Trip {truck.trip || 1}</Text>
+                  <Text style={[styles.truckNo, filled && styles.filledText]}>{truck.truckNo} (Trip {truck.trip || 1})</Text>
                   <Text style={[styles.route, filled && styles.filledText]}>
                     {filled
                       ? `Bags ${truck.load.bags} · Set ${truck.load.setNo} · Wagon ${truck.load.wagonNo || '—'} · ${truck.deliveryTo || '—'}`

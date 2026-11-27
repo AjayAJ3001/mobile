@@ -78,7 +78,7 @@ export default function ClosedLoadScreen({ route, navigation }) {
         <Text style={styles.setTitle}>Trucks</Text>
         {(report.trucks || []).map((truck) => (
           <View key={`${truck.sno}-${truck.truckNo}`} style={styles.truck}>
-            <Text style={styles.line}>{truck.sno}. {truck.truckNo}</Text>
+            <Text style={styles.line}>{truck.sno}. {truck.truckNo} (Trip {truck.trip || 1})</Text>
             {truck.entered ? (
               <Text style={styles.muted}>Set {truck.setNo} · {truck.wagonNo || 'wagon'} · {truck.bags} bags · {truck.deliveryTo || '—'}</Text>
             ) : (

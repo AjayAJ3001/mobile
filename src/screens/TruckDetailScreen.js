@@ -17,6 +17,7 @@ export default function TruckDetailScreen({ route }) {
           ['Station From', truck.stationFrom],
           ['Station To', truck.stationTo],
           ['Serial no', truck.sno],
+          ['Trip', `Trip ${truck.trip || 1}`],
           ['Truck number', truck.truckNo],
           ['Commodity', truck.commodity],
           ['Party name', truck.partyName],

@@ -12,6 +12,7 @@ function show(value) {
 export function reportColumns(item = {}) {
   return [
     ['Vehicle no', item.truckNo],
+    ['Trip', item.trip ? `Trip ${item.trip}` : 'Trip 1'],
     ['Wagon no', item.wagonNo],
     ['Party name', item.partyName],
     ['RR No', item.rrNo],
@@ -32,6 +33,7 @@ export function reportColumns(item = {}) {
 
 export const REPORT_WIDTHS = {
   'Vehicle no': 132,
+  Trip: 72,
   'Wagon no': 96,
   'Party name': 168,
   'RR No': 118,
