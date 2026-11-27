@@ -54,23 +54,80 @@ export default function LoadScreen({ route, navigation }) {
   const [setOpen, setSetOpen] = useState(false);
   const [wagonId, setWagonId] = useState(null);
   const [wagonOpen, setWagonOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTruckNo, setEditTruckNo] = useState('');
+  const [editUnitId, setEditUnitId] = useState(null);
+  const [editUnitOpen, setEditUnitOpen] = useState(false);
+  const [partyUnits, setPartyUnits] = useState(route.params.truck?.partyUnits || []);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setTruck(route.params.truck);
+    const cur = route.params.truck;
+    setTruck(cur);
     setBags('');
     setSetNo(null);
     setSetOpen(false);
     setWagonId(null);
     setWagonOpen(false);
+    setIsEditing(false);
+    setEditTruckNo(cur.truckNo || '');
+    setEditUnitId(cur.unitId || null);
+    setEditUnitOpen(false);
+    setPartyUnits(cur.partyUnits || []);
     setError('');
   }, [route.params.truck]);
+
+  // Fetch party units if not already passed
+  useEffect(() => {
+    if (!partyUnits.length && truck?.partyName) {
+      api('/api/loads')
+        .then((data) => {
+          const matching = (data.trucks || []).find((t) => t.id === truck.id);
+          if (matching?.partyUnits?.length) {
+            setPartyUnits(matching.partyUnits);
+            if (!editUnitId && matching.unitId) setEditUnitId(matching.unitId);
+          } else if (data.parties?.length) {
+            const p = data.parties.find((item) => item.name === truck.partyName || item.id === truck.partyId);
+            if (p?.units?.length) setPartyUnits(p.units);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [truck?.id, truck?.partyName, truck?.partyId, partyUnits.length, editUnitId]);
+
   const saved = Boolean(truck.load);
   const choices = setChoices(truck);
   const selectedSet = choices.find((item) => Number(item.setNo) === Number(setNo)) || (saved ? choices.find((item) => Number(item.setNo) === Number(truck.load.setNo)) : null);
   const wagons = selectedSet?.wagons || [];
   const selectedWagon = wagons.find((item) => item.id === wagonId) || (saved ? wagons.find((item) => item.id === truck.load?.wagonId) : null);
+  const selectedUnit = partyUnits.find((u) => u.id === editUnitId) || null;
+
+  function startEditing() {
+    setEditTruckNo(truck.truckNo || '');
+    setEditUnitId(truck.unitId || null);
+    setBags(truck.load?.bags ? String(truck.load.bags) : '');
+    setSetNo(truck.load?.setNo ? Number(truck.load.setNo) : null);
+    setWagonId(truck.load?.wagonId || null);
+    setSetOpen(false);
+    setWagonOpen(false);
+    setEditUnitOpen(false);
+    setError('');
+    setIsEditing(true);
+  }
+
+  function cancelEditing() {
+    setEditTruckNo(truck.truckNo || '');
+    setEditUnitId(truck.unitId || null);
+    setBags('');
+    setSetNo(null);
+    setWagonId(null);
+    setSetOpen(false);
+    setWagonOpen(false);
+    setEditUnitOpen(false);
+    setError('');
+    setIsEditing(false);
+  }
 
   async function submit() {
     const count = Number(bags);
@@ -94,7 +151,55 @@ export default function LoadScreen({ route, navigation }) {
     setError('');
     try {
       const data = await api('/api/loads', { method: 'POST', body: { truckId: truck.id, bags: count, setNo, wagonId: selectedWagon.id } });
-      setTruck({ ...data.truck, trip: data.truck?.trip || truck.trip });
+      setTruck({ ...data.truck, partyUnits: data.truck?.partyUnits?.length ? data.truck.partyUnits : partyUnits });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveEdit() {
+    const count = Number(bags);
+    if (!editTruckNo.trim()) {
+      setError('Enter the truck number.');
+      return;
+    }
+    if (!Number.isInteger(count) || count < 1) {
+      setError('Enter the number of bags.');
+      return;
+    }
+    if (!setNo) {
+      setError('Choose a set number.');
+      return;
+    }
+    if (!selectedWagon) {
+      setError('Choose the wagon number.');
+      return;
+    }
+    const currentWagonBalance = selectedWagon.id === truck.load?.wagonId
+      ? selectedWagon.balanceBags + Number(truck.load?.bags || 0)
+      : selectedWagon.balanceBags;
+    if (count > currentWagonBalance) {
+      setError(`Wagon ${selectedWagon.wagonNo} has ${currentWagonBalance} bags left.`);
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const data = await api(`/api/loads/${truck.id}`, {
+        method: 'PUT',
+        body: {
+          truckId: truck.id,
+          truckNo: editTruckNo.trim().toUpperCase(),
+          unitId: editUnitId,
+          bags: count,
+          setNo,
+          wagonId: selectedWagon.id,
+        },
+      });
+      setTruck({ ...data.truck, partyUnits: data.truck?.partyUnits?.length ? data.truck.partyUnits : partyUnits });
+      setIsEditing(false);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -115,25 +220,61 @@ export default function LoadScreen({ route, navigation }) {
     <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <View style={styles.card}>
-        <Details truck={truck} />
-        {truck.closed && !saved ? (
-          <Text style={styles.pending}>Load not entered. This RR is closed.</Text>
-        ) : saved ? (
+        {isEditing ? (
           <>
-            <Text style={styles.row}><Text style={styles.rowLabel}>Bags: </Text>{truck.load.bags}</Text>
-            <Text style={styles.row}><Text style={styles.rowLabel}>Set no: </Text>{truck.load.setNo}</Text>
-            <Text style={styles.row}><Text style={styles.rowLabel}>Wagon no: </Text>{truck.load.wagonNo || '—'}</Text>
-            <Text style={styles.row}><Text style={styles.rowLabel}>Articles: </Text>{selectedWagon?.articleCount ?? '—'}</Text>
-            <Text style={styles.row}><Text style={styles.rowLabel}>Balance bags: </Text>{selectedWagon?.balanceBags ?? '—'}</Text>
-            <View style={styles.actions}>
-              <Pressable style={styles.action} onPress={() => navigation.navigate('LoadView', { truck })}><Text style={styles.actionText}>View</Text></Pressable>
-              <Pressable style={styles.action} onPress={() => run(printLoad)}><Text style={styles.actionText}>Print</Text></Pressable>
-              <Pressable style={styles.action} onPress={() => run(shareLoad)}><Text style={styles.actionText}>Share</Text></Pressable>
-              <Pressable style={styles.action} onPress={() => run(downloadLoad)}><Text style={styles.actionText}>Download</Text></Pressable>
+            <View style={styles.editHeader}>
+              <Text style={styles.editTitle}>Edit Load Entry</Text>
+              <Text style={styles.editSub}>S.no: {truck.sno} · Trip {truck.trip || 1}</Text>
             </View>
-          </>
-        ) : (
-          <>
+
+            <View style={styles.rrBlock}>
+              <View style={styles.pair}>
+                <Field label="RR No" value={truck.rrNo} />
+                <Field label="RR Date" value={truck.rrDate} />
+              </View>
+              <Field label="Party name" value={truck.partyName} />
+              <Field label="Commodity" value={truck.commodity} />
+            </View>
+
+            <Text style={styles.label}>Truck number</Text>
+            <TextInput
+              style={styles.input}
+              value={editTruckNo}
+              autoCapitalize="characters"
+              placeholder="Truck number"
+              onChangeText={(value) => setEditTruckNo(value.toUpperCase())}
+            />
+
+            <Text style={styles.label}>Delivery to</Text>
+            <Pressable
+              style={styles.dropdown}
+              onPress={() => setEditUnitOpen((open) => !open)}
+            >
+              <Text style={selectedUnit || truck.deliveryTo ? styles.dropdownText : styles.dropdownPlaceholder}>
+                {selectedUnit?.name || truck.deliveryTo || 'Choose delivery to'}
+              </Text>
+              <View style={[styles.chevron, editUnitOpen && styles.chevronUp]} />
+            </Pressable>
+            {editUnitOpen ? (
+              <View style={styles.menu}>
+                {partyUnits.map((item) => (
+                  <Pressable
+                    key={item.id}
+                    style={[styles.menuItem, item.id === editUnitId && styles.optionOn]}
+                    onPress={() => {
+                      setEditUnitId(item.id);
+                      setEditUnitOpen(false);
+                    }}
+                  >
+                    <Text style={item.id === editUnitId ? styles.optionOnText : styles.optionText}>
+                      {item.name}
+                    </Text>
+                  </Pressable>
+                ))}
+                {!partyUnits.length ? <Text style={styles.menuItem}>No delivery units available for this party.</Text> : null}
+              </View>
+            ) : null}
+
             <Text style={styles.label}>Bags</Text>
             <TextInput
               style={styles.input}
@@ -143,9 +284,12 @@ export default function LoadScreen({ route, navigation }) {
               inputMode="numeric"
               onChangeText={(value) => setBags(value.replace(/[^0-9]/g, ''))}
             />
+
             <Text style={styles.label}>Set no</Text>
             <Pressable style={styles.dropdown} onPress={() => setSetOpen((open) => !open)}>
-              <Text style={setNo ? styles.dropdownText : styles.dropdownPlaceholder}>{setNo || 'Choose set no'}</Text>
+              <Text style={setNo ? styles.dropdownText : styles.dropdownPlaceholder}>
+                {setNo ? `Set ${setNo}` : 'Choose set no'}
+              </Text>
               <View style={[styles.chevron, setOpen && styles.chevronUp]} />
             </Pressable>
             {setOpen ? (
@@ -162,12 +306,13 @@ export default function LoadScreen({ route, navigation }) {
                     }}
                   >
                     <Text style={Number(item.setNo) === setNo ? styles.optionOnText : styles.optionText}>
-                      {item.balanceBags == null ? item.setNo : `${item.setNo} · balance ${item.balanceBags}`}
+                      {item.balanceBags == null ? `Set ${item.setNo}` : `Set ${item.setNo} · balance ${item.balanceBags}`}
                     </Text>
                   </Pressable>
                 ))}
               </View>
             ) : null}
+
             <Text style={styles.label}>Wagon no</Text>
             <Pressable
               style={styles.dropdown}
@@ -182,31 +327,153 @@ export default function LoadScreen({ route, navigation }) {
             {selectedWagon ? (
               <>
                 <Text style={styles.row}><Text style={styles.rowLabel}>Articles: </Text>{selectedWagon.articleCount}</Text>
-                <Text style={styles.row}><Text style={styles.rowLabel}>Balance bags: </Text>{selectedWagon.balanceBags}</Text>
+                <Text style={styles.row}>
+                  <Text style={styles.rowLabel}>Available balance: </Text>
+                  {selectedWagon.id === truck.load?.wagonId
+                    ? selectedWagon.balanceBags + Number(truck.load?.bags || 0)
+                    : selectedWagon.balanceBags}
+                </Text>
               </>
             ) : null}
             {wagonOpen ? (
               <View style={styles.menu}>
-                {wagons.map((item) => (
-                  <Pressable
-                    key={item.id}
-                    style={[styles.menuItem, item.id === wagonId && styles.optionOn]}
-                    onPress={() => {
-                      setWagonId(item.id);
-                      setWagonOpen(false);
-                    }}
-                  >
-                    <Text style={item.id === wagonId ? styles.optionOnText : styles.optionText}>
-                      {item.wagonNo} · {item.balanceBags} left
-                    </Text>
-                  </Pressable>
-                ))}
+                {wagons.map((item) => {
+                  const avail = item.id === truck.load?.wagonId
+                    ? item.balanceBags + Number(truck.load?.bags || 0)
+                    : item.balanceBags;
+                  return (
+                    <Pressable
+                      key={item.id}
+                      style={[styles.menuItem, item.id === wagonId && styles.optionOn]}
+                      onPress={() => {
+                        setWagonId(item.id);
+                        setWagonOpen(false);
+                      }}
+                    >
+                      <Text style={item.id === wagonId ? styles.optionOnText : styles.optionText}>
+                        {item.wagonNo} · {avail} left
+                      </Text>
+                    </Pressable>
+                  );
+                })}
                 {!wagons.length ? <Text style={styles.menuItem}>This set has no wagons.</Text> : null}
               </View>
             ) : null}
-            <Pressable style={styles.primary} disabled={busy} onPress={submit}>
-              <Text style={styles.primaryText}>{busy ? 'Submitting…' : 'Submit'}</Text>
+
+            <Pressable style={styles.primary} disabled={busy} onPress={saveEdit}>
+              <Text style={styles.primaryText}>{busy ? 'Saving changes…' : 'Save Changes'}</Text>
             </Pressable>
+            <Pressable style={styles.cancelButton} disabled={busy} onPress={cancelEditing}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Details truck={truck} />
+            {truck.closed && !saved ? (
+              <Text style={styles.pending}>Load not entered. This RR is closed.</Text>
+            ) : saved ? (
+              <>
+                <Text style={styles.row}><Text style={styles.rowLabel}>Bags: </Text>{truck.load.bags}</Text>
+                <Text style={styles.row}><Text style={styles.rowLabel}>Set no: </Text>{truck.load.setNo}</Text>
+                <Text style={styles.row}><Text style={styles.rowLabel}>Wagon no: </Text>{truck.load.wagonNo || '—'}</Text>
+                <Text style={styles.row}><Text style={styles.rowLabel}>Articles: </Text>{selectedWagon?.articleCount ?? '—'}</Text>
+                <Text style={styles.row}><Text style={styles.rowLabel}>Balance bags: </Text>{selectedWagon?.balanceBags ?? '—'}</Text>
+                <View style={styles.actions}>
+                  <Pressable style={[styles.action, styles.editAction]} onPress={startEditing}>
+                    <Text style={[styles.actionText, styles.editActionText]}>Edit</Text>
+                  </Pressable>
+                  <Pressable style={styles.action} onPress={() => navigation.navigate('LoadView', { truck })}>
+                    <Text style={styles.actionText}>View</Text>
+                  </Pressable>
+                  <Pressable style={styles.action} onPress={() => run(printLoad)}>
+                    <Text style={styles.actionText}>Print</Text>
+                  </Pressable>
+                  <Pressable style={styles.action} onPress={() => run(shareLoad)}>
+                    <Text style={styles.actionText}>Share</Text>
+                  </Pressable>
+                  <Pressable style={styles.action} onPress={() => run(downloadLoad)}>
+                    <Text style={styles.actionText}>Download</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.label}>Bags</Text>
+                <TextInput
+                  style={styles.input}
+                  value={bags}
+                  placeholder="Number of bags"
+                  keyboardType="number-pad"
+                  inputMode="numeric"
+                  onChangeText={(value) => setBags(value.replace(/[^0-9]/g, ''))}
+                />
+                <Text style={styles.label}>Set no</Text>
+                <Pressable style={styles.dropdown} onPress={() => setSetOpen((open) => !open)}>
+                  <Text style={setNo ? styles.dropdownText : styles.dropdownPlaceholder}>{setNo || 'Choose set no'}</Text>
+                  <View style={[styles.chevron, setOpen && styles.chevronUp]} />
+                </Pressable>
+                {setOpen ? (
+                  <View style={styles.menu}>
+                    {choices.map((item) => (
+                      <Pressable
+                        key={item.setNo}
+                        style={[styles.menuItem, Number(item.setNo) === setNo && styles.optionOn]}
+                        onPress={() => {
+                          setSetNo(Number(item.setNo));
+                          setWagonId(null);
+                          setSetOpen(false);
+                          setWagonOpen(false);
+                        }}
+                      >
+                        <Text style={Number(item.setNo) === setNo ? styles.optionOnText : styles.optionText}>
+                          {item.balanceBags == null ? item.setNo : `${item.setNo} · balance ${item.balanceBags}`}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
+                <Text style={styles.label}>Wagon no</Text>
+                <Pressable
+                  style={styles.dropdown}
+                  disabled={!setNo}
+                  onPress={() => setNo && setWagonOpen((open) => !open)}
+                >
+                  <Text style={selectedWagon ? styles.dropdownText : styles.dropdownPlaceholder}>
+                    {selectedWagon?.wagonNo || (setNo ? 'Choose wagon no' : 'Choose set no first')}
+                  </Text>
+                  <View style={[styles.chevron, wagonOpen && styles.chevronUp]} />
+                </Pressable>
+                {selectedWagon ? (
+                  <>
+                    <Text style={styles.row}><Text style={styles.rowLabel}>Articles: </Text>{selectedWagon.articleCount}</Text>
+                    <Text style={styles.row}><Text style={styles.rowLabel}>Balance bags: </Text>{selectedWagon.balanceBags}</Text>
+                  </>
+                ) : null}
+                {wagonOpen ? (
+                  <View style={styles.menu}>
+                    {wagons.map((item) => (
+                      <Pressable
+                        key={item.id}
+                        style={[styles.menuItem, item.id === wagonId && styles.optionOn]}
+                        onPress={() => {
+                          setWagonId(item.id);
+                          setWagonOpen(false);
+                        }}
+                      >
+                        <Text style={item.id === wagonId ? styles.optionOnText : styles.optionText}>
+                          {item.wagonNo} · {item.balanceBags} left
+                        </Text>
+                      </Pressable>
+                    ))}
+                    {!wagons.length ? <Text style={styles.menuItem}>This set has no wagons.</Text> : null}
+                  </View>
+                ) : null}
+                <Pressable style={styles.primary} disabled={busy} onPress={submit}>
+                  <Text style={styles.primaryText}>{busy ? 'Submitting…' : 'Submit'}</Text>
+                </Pressable>
+              </>
+            )}
           </>
         )}
         <View style={styles.buttonRow}>
@@ -236,7 +503,7 @@ const styles = StyleSheet.create({
   navButton: { flex: 1, borderWidth: 1, borderColor: colors.line, backgroundColor: '#fff', borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   navText: { color: colors.ink, fontWeight: '700' },
   label: { marginTop: 8, fontWeight: '700' },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 12, fontWeight: '700' },
+  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 12, fontWeight: '700', color: colors.ink },
   dropdown: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12 },
   dropdownText: { flex: 1, fontWeight: '700', color: colors.ink },
   dropdownPlaceholder: { flex: 1, color: colors.muted },
@@ -252,6 +519,13 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   action: { flexGrow: 1, flexBasis: '45%', backgroundColor: colors.green, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   actionText: { color: colors.onYellow, fontWeight: '700' },
+  editAction: { backgroundColor: '#1d4ed8' },
+  editActionText: { color: '#ffffff', fontWeight: '800' },
+  editHeader: { backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 12, padding: 12, marginBottom: 4 },
+  editTitle: { color: '#1d4ed8', fontSize: 18, fontWeight: '800' },
+  editSub: { color: '#3b82f6', fontSize: 13, fontWeight: '700', marginTop: 2 },
+  cancelButton: { borderWidth: 1, borderColor: colors.line, backgroundColor: '#fff', borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 8 },
+  cancelButtonText: { color: colors.ink, fontWeight: '700' },
   error: { backgroundColor: colors.dangerSoft, color: colors.danger, padding: 12, borderRadius: 12, marginBottom: 12 },
   pending: { backgroundColor: colors.dangerSoft, color: colors.danger, fontWeight: '700', padding: 12, borderRadius: 12 },
 });
